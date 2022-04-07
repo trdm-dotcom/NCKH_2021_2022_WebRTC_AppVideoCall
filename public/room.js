@@ -1,22 +1,24 @@
 const socket = io("/");
 const chatButton = document.getElementById("chatButton");
-const playStopButton = document.getElementById("playStopButton");
-const muteButton = document.getElementById("muteButton");
 const inviteButton = document.getElementById("inviteButton");
 const copyButton = document.getElementById("copyButton");
 const invitePopup = document.getElementById("invite_popup");
 const chatPopup = document.getElementById("chat_popup");
 const videoGrid = document.getElementById("video-grid");
+const chatMessage = document.getElementById("chat_message");
+const buttonSend = document.getElementById("button_send");
 const recordButton = document.getElementById("recordButton");
 const shareScreemButton = document.getElementById("shareScreemButton");
 const myVideo = document.createElement("video");
 const shareVideo = document.createElement("video");
+const msgerChat = document.getElementById("msger_chat");
 myVideo.muted = true;
+var joined = [];
+var peers = {};
 var userId = null;
 var localStream;
 var mediaRecorder;
 var recordedBlobs;
-var peers = {};
 var peer = new Peer(undefined, {
   path: "/peerjs",
   host: "/",
@@ -25,7 +27,8 @@ var peer = new Peer(undefined, {
 
 peer.on('open', function (id) {
   userId = id;
-  socket.emit("join-room", ROOM_ID, id);
+  joined.push(userId);
+  socket.emit("joinRoom", ROOM_ID, id);
 });
 
 var getUserMedia =
@@ -50,13 +53,64 @@ const playVideoFromCamera = async () => {
 playVideoFromCamera().then((stream) => {
   localStream = stream;
   addVideoStream(myVideo, stream, userId);
-  socket.on("user-connected", (peerID) => {
+  socket.on("userConnected", (peerID) => {
     connectToNewUser(peerID, stream);
   });
+  socket.on("userDisconnected",(peerID) => {
+    console.log(peerID);
+    // if(peers[peerID]) peers[peerID].close();
+  });
+  socket.on("createMessage", (msg) => {
+    let html = '';
+    console.log(msg);
+    if (msg.user != userId){
+      html = `<div class="msg left-msg">
+                  <div class="msg-bubble">
+                    <div class="msg-info">
+                      <div class="msg-info-name">${msg.user}</div>
+                    </div>
+                    <div class="msg-text">${msg.msg}</div>
+                  </div>
+                </div>`
+    }
+    else{
+      html = `<div class="msg right-msg">
+                  <div class="msg-bubble">
+                    <div class="msg-info">
+                      <div class="msg-info-name">${msg.user}</div>
+                    </div>
+                    <div class="msg-text">${msg.msg}</div>
+                  </div>
+                </div>`
+    }
+    msgerChat.innerHTML += html
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === 'Enter' && chatMessage.value.trim() != "") {
+      msg = chatMessage.value.trim(); 
+      chatMessage.value = "";
+      socket.emit("message", {
+        msg:msg,
+        user: userId
+      });
+    }
+  });
+  buttonSend.addEventListener("click",() => {
+    if (chatMessage.value.trim() != "") {
+      msg = chatMessage.value.trim(); 
+      chatMessage.value = "";
+      socket.emit("message", {
+        msg:msg,
+        user: userId
+      });
+    }
+  })
+}).catch(error => {
+  console.error(error)
 });
 
 peer.on("call", (call) =>{
-  console.log(call.peer);
+  joined.push(call.peer);
   getUserMedia(
     { video: true, audio: true },
     function (stream) {
@@ -72,14 +126,21 @@ peer.on("call", (call) =>{
   );
 });
 
-// CHAT
+socket.on("disconnect",() => {
+  socket.emit("leaveRoom",ROOM_ID,userId);
+})
 
 const connectToNewUser = (peerId, streams) => {
+  joined.push(peerId);
   var call = peer.call(peerId, streams);
   var video = document.createElement("video");
   call.on("stream", (userVideoStream) => {
     addVideoStream(video, userVideoStream, peerId);
   });
+  call.on("close",() => {
+    video.remove();
+  });
+  peers[peerId] = call;
 };
 
 const addVideoStream = (videoEl, stream, id) => {
@@ -107,37 +168,6 @@ const retoreVideoGrid = () => {
     }
   }
 }
-
-const playStop = () => {
-  let enabled = localStream.getVideoTracks()[0].enabled;
-  if (enabled) {
-    localStream.getVideoTracks()[0].enabled = false;
-    localStream.getVideoTracks()[0].stop();
-    playStopButton.classList.toggle("stop");
-  } else {
-    playStopButton.classList.remove("stop");
-    localStream.getVideoTracks()[0].enabled = true;
-    playVideoFromCamera().then(stream => {
-      localStream = stream;
-      addVideoStream(myVideo, stream, "share")
-    })
-      .catch(error => {
-        console.error(error)
-      });
-  }
-};
-
-const muteUnmute = () => {
-  const enabled = localStream.getAudioTracks()[0].enabled;
-  if (enabled) {
-    localStream.getAudioTracks()[0].enabled = false;
-    localStream.getAudioTracks()[0].stop();
-    muteButton.classList.toggle("stop");
-  } else {
-    muteButton.classList.remove("stop");
-    localStream.getAudioTracks()[0].enabled = true;
-  }
-};
 
 const record = () => {
   if (recordButton.dataset.status === "start") {
@@ -272,7 +302,5 @@ inviteButton.addEventListener("click", showInvitePopup);
 chatButton.addEventListener("click", showChatPopup);
 copyButton.addEventListener("click", copyToClipboard);
 window.addEventListener("click", windowOnClick);
-playStopButton.addEventListener("click", playStop);
-muteButton.addEventListener("click", muteUnmute);
 shareScreemButton.addEventListener("click", shareScreem);
 recordButton.addEventListener("click", record);

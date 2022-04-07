@@ -31,10 +31,9 @@ router.get("/:room", (req, res) => {
 app.use(router);
 
 io.on("connection", (socket) => {
-  socket.on("join-room", (roomId, userId) => {
+  socket.on("joinRoom", (roomId, userId) => {
     socket.join(roomId);
-    socket.to(roomId).broadcast.emit("user-connected", userId);
-    socket.to(roomId).broadcast.emit("user-disconnected", userId);
+    socket.to(roomId).broadcast.emit("userConnected", userId);
     socket.on("message", (message) => {
       io.to(roomId).emit("createMessage", message);
     });
@@ -42,9 +41,12 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("stopVideo",userId);
     });
     socket.on("playCam",(data) => {
-      io.to(roomId).emit("playVideo",{data});
+      io.to(roomId).emit("playVideo",userId);
     })
   });
+  socket.on("leaveRoom",(roomId,userId) => {
+    socket.to(roomId).broadcast.emit("userDisconnected", userId);
+  })
 });
 
 server.listen(process.env.PORT || 3030);

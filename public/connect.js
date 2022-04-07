@@ -16,7 +16,6 @@ var peer = new Peer(undefined, {
 
 peer.on("open", (id) => {
     userId = id;
-    console.log(userId);
 });
 
 async function playVideoFromCamera() {
