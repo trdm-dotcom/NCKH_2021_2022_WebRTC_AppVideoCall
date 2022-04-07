@@ -9,9 +9,12 @@ const chatMessage = document.getElementById("chat_message");
 const buttonSend = document.getElementById("button_send");
 const recordButton = document.getElementById("recordButton");
 const shareScreemButton = document.getElementById("shareScreemButton");
+const listButton = document.getElementById("listButton");
+const listUserPopup = document.getElementById("list_user_popup");
 const myVideo = document.createElement("video");
 const shareVideo = document.createElement("video");
 const msgerChat = document.getElementById("msger_chat");
+const listUserOnl = document.getElementById("listUserOnl");
 myVideo.muted = true;
 var joined = [];
 var peers = {};
@@ -28,7 +31,9 @@ var peer = new Peer(undefined, {
 peer.on('open', function (id) {
   userId = id;
   joined.push(userId);
-  socket.emit("joinRoom", ROOM_ID, id);
+  let name = prompt("Nhập tên của bạn",'');
+  name = name.trim() == '' ? id : name.trim()
+  socket.emit("joinRoom", ROOM_ID, {id:id,name:name});
 });
 
 var getUserMedia =
@@ -57,8 +62,7 @@ playVideoFromCamera().then((stream) => {
     connectToNewUser(peerID, stream);
   });
   socket.on("userDisconnected",(peerID) => {
-    console.log(peerID);
-    // if(peers[peerID]) peers[peerID].close();
+    if(peers[peerID]) peers[peerID].close();
   });
   socket.on("createMessage", (msg) => {
     let html = '';
@@ -68,6 +72,7 @@ playVideoFromCamera().then((stream) => {
                   <div class="msg-bubble">
                     <div class="msg-info">
                       <div class="msg-info-name">${msg.user}</div>
+                      <div class="msg-info-time">${msg.time}</div>
                     </div>
                     <div class="msg-text">${msg.msg}</div>
                   </div>
@@ -78,6 +83,7 @@ playVideoFromCamera().then((stream) => {
                   <div class="msg-bubble">
                     <div class="msg-info">
                       <div class="msg-info-name">${msg.user}</div>
+                      <div class="msg-info-time">${msg.time}</div>
                     </div>
                     <div class="msg-text">${msg.msg}</div>
                   </div>
@@ -87,26 +93,42 @@ playVideoFromCamera().then((stream) => {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === 'Enter' && chatMessage.value.trim() != "") {
-      msg = chatMessage.value.trim(); 
+      let current = new Date();
+      let msg = chatMessage.value.trim(); 
       chatMessage.value = "";
       socket.emit("message", {
         msg:msg,
-        user: userId
+        user:userId,
+        time:current.toLocaleTimeString()
       });
     }
   });
   buttonSend.addEventListener("click",() => {
     if (chatMessage.value.trim() != "") {
-      msg = chatMessage.value.trim(); 
+      let current = new Date();
+      let msg = chatMessage.value.trim(); 
       chatMessage.value = "";
       socket.emit("message", {
         msg:msg,
-        user: userId
+        user:userId,
+        time:current.toLocaleTimeString()
       });
     }
   })
 }).catch(error => {
   console.error(error)
+});
+
+socket.on("refeshListUser",(listUserInfo) => {
+  let html = '';
+  listUserInfo.forEach(element => {
+    html += `<li class="list-item">
+              <div class="list-item-content">
+                <h4>${element.name}</h4>
+              </div>
+            </li>`
+  });
+  listUserOnl.innerHTML = html;
 });
 
 peer.on("call", (call) =>{
@@ -282,12 +304,19 @@ const showChatPopup = () => {
   chatPopup.classList.toggle("show-modal");
 }
 
+const showListUserPopUp = () => {
+  listUserPopup.classList.toggle("show-modal");
+}
+
 function windowOnClick(event) {
   if (event.target === invitePopup) {
     showInvitePopup();
   }
   if (event.target === chatPopup) {
     showChatPopup();
+  }
+  if (event.target === listUserPopup){
+    showListUserPopUp();
   }
 }
 
@@ -304,3 +333,4 @@ copyButton.addEventListener("click", copyToClipboard);
 window.addEventListener("click", windowOnClick);
 shareScreemButton.addEventListener("click", shareScreem);
 recordButton.addEventListener("click", record);
+listButton.addEventListener("click",showListUserPopUp);

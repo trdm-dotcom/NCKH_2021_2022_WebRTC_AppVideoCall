@@ -4,6 +4,7 @@ const server = require("http").Server(app);
 const { v4: uuidv4 } = require("uuid");
 const io = require("socket.io")(server);
 const router = express.Router();
+const redis = require("redis");
 // Peer
 
 const { ExpressPeerServer } = require("peer");
@@ -19,30 +20,22 @@ router.get("/", (req, rsp) => {
   rsp.redirect(`/${uuidv4()}`);
 });
 
-router.get("/connect", (req, res) => {
-  console.log(req.query.room);
-  res.render("connect", { roomId: req.query.room });
-});
-
 router.get("/:room", (req, res) => {
   res.render("room", { roomId: req.params.room });
 });
 
 app.use(router);
-
+let listUserInfo = [];
 io.on("connection", (socket) => {
-  socket.on("joinRoom", (roomId, userId) => {
+  socket.on("joinRoom", (roomId, user) => {
     socket.join(roomId);
-    socket.to(roomId).broadcast.emit("userConnected", userId);
+    listUserInfo.push(user);
+    console.log(listUserInfo);
+    socket.to(roomId).broadcast.emit("userConnected", user.id);
+    io.to(roomId).emit("refeshListUser",listUserInfo);
     socket.on("message", (message) => {
       io.to(roomId).emit("createMessage", message);
     });
-    socket.on("stopCam", (userId) => {
-      io.to(roomId).emit("stopVideo",userId);
-    });
-    socket.on("playCam",(data) => {
-      io.to(roomId).emit("playVideo",userId);
-    })
   });
   socket.on("leaveRoom",(roomId,userId) => {
     socket.to(roomId).broadcast.emit("userDisconnected", userId);
