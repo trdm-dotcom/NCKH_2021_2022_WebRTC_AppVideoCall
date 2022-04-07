@@ -23,8 +23,8 @@ var peer = new Peer(undefined, {
   port: "3030",
 });
 
-peer.on('open', function(id) {
-	userId = id;
+peer.on('open', function (id) {
+  userId = id;
   socket.emit("join-room", ROOM_ID, id);
 });
 
@@ -33,7 +33,7 @@ var getUserMedia =
   navigator.webkitGetUserMedia ||
   navigator.mozGetUserMedia;
 const hasUserMedia = () => {
-    return !!(navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia);
+  return !!(navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia);
 }
 const playVideoFromCamera = async () => {
   let stream = null;
@@ -48,31 +48,22 @@ const playVideoFromCamera = async () => {
   return stream;
 }
 playVideoFromCamera().then((stream) => {
-    localStream = stream;
-    addVideoStream(myVideo, stream);
-
-    peer.on("call", (call) => {
-      call.answer(stream);
-      const video = document.createElement("video");
-
-      call.on("stream", (userVideoStream) => {
-        addVideoStream(video, userVideoStream);
-      });
-    });
-
-    socket.on("user-connected", (userId) => {
-      connectToNewUser(userId, stream);
-    });
+  localStream = stream;
+  addVideoStream(myVideo, stream, userId);
+  socket.on("user-connected", (peerID) => {
+    connectToNewUser(peerID, stream);
   });
+});
 
-peer.on("call", function (call) {
+peer.on("call", (call) =>{
+  console.log(call.peer);
   getUserMedia(
     { video: true, audio: true },
     function (stream) {
       call.answer(stream); // Answer the call with an A/V stream.
       const video = document.createElement("video");
       call.on("stream", function (remoteStream) {
-        addVideoStream(video, remoteStream);
+        addVideoStream(video, remoteStream,call.peer);
       });
     },
     function (err) {
@@ -81,19 +72,13 @@ peer.on("call", function (call) {
   );
 });
 
-peer.on("open", (id) => {
-  socket.emit("join-room", ROOM_ID, id);
-});
-
 // CHAT
 
-const connectToNewUser = (userId, streams) => {
-  var call = peer.call(userId, streams);
-  console.log(call);
+const connectToNewUser = (peerId, streams) => {
+  var call = peer.call(peerId, streams);
   var video = document.createElement("video");
   call.on("stream", (userVideoStream) => {
-    console.log(userVideoStream);
-    addVideoStream(video, userVideoStream);
+    addVideoStream(video, userVideoStream, peerId);
   });
 };
 
@@ -117,27 +102,27 @@ const addVideoStream = (videoEl, stream, id) => {
 const retoreVideoGrid = () => {
   let totalVideos = document.getElementsByTagName("video").length;
   if (totalVideos > 1) {
-      for (let index = 0; index < totalVideos ; index++) {
-          document.getElementsByTagName("video")[index].style.width = 100 / totalVideos+"%";
-      }
+    for (let index = 0; index < totalVideos; index++) {
+      document.getElementsByTagName("video")[index].style.width = 100 / totalVideos + "%";
+    }
   }
 }
 
 const playStop = () => {
   let enabled = localStream.getVideoTracks()[0].enabled;
   if (enabled) {
-      localStream.getVideoTracks()[0].enabled = false;
-      localStream.getVideoTracks()[0].stop();
-      playStopButton.classList.toggle("stop");
+    localStream.getVideoTracks()[0].enabled = false;
+    localStream.getVideoTracks()[0].stop();
+    playStopButton.classList.toggle("stop");
   } else {
-      playStopButton.classList.remove("stop");
-      localStream.getVideoTracks()[0].enabled = true;
-      playVideoFromCamera().then(stream => {
-          localStream = stream;
-          addVideoStream(myVideo,stream,"share")
-      })
+    playStopButton.classList.remove("stop");
+    localStream.getVideoTracks()[0].enabled = true;
+    playVideoFromCamera().then(stream => {
+      localStream = stream;
+      addVideoStream(myVideo, stream, "share")
+    })
       .catch(error => {
-          console.error(error)
+        console.error(error)
       });
   }
 };
@@ -145,71 +130,71 @@ const playStop = () => {
 const muteUnmute = () => {
   const enabled = localStream.getAudioTracks()[0].enabled;
   if (enabled) {
-      localStream.getAudioTracks()[0].enabled = false;
-      localStream.getAudioTracks()[0].stop();
-      muteButton.classList.toggle("stop");
+    localStream.getAudioTracks()[0].enabled = false;
+    localStream.getAudioTracks()[0].stop();
+    muteButton.classList.toggle("stop");
   } else {
-      muteButton.classList.remove("stop");
-      localStream.getAudioTracks()[0].enabled = true;
+    muteButton.classList.remove("stop");
+    localStream.getAudioTracks()[0].enabled = true;
   }
 };
 
 const record = () => {
-  if (recordButton.dataset.status === "start"){
-      startRecord();
+  if (recordButton.dataset.status === "start") {
+    startRecord();
   }
-  else if(recordButton.dataset.status === "pause"){
-      pauseRecord();
+  else if (recordButton.dataset.status === "pause") {
+    pauseRecord();
   }
-  else if(recordButton.dataset.status === "resume"){
-      resumeRecord();
+  else if (recordButton.dataset.status === "resume") {
+    resumeRecord();
   }
 }
 
 const startRecord = () => {
-  if(confirm("Start record ?")){
-      recordedBlobs = [];
-      var options = { mimeType: "video/webm; codecs=vp9" };
-      try {
-          mediaRecorder = new MediaRecorder(localStream, options);
-      } catch (error) {
-          console.error(error);
-          return;
+  if (confirm("Start record ?")) {
+    recordedBlobs = [];
+    var options = { mimeType: "video/webm; codecs=vp9" };
+    try {
+      mediaRecorder = new MediaRecorder(localStream, options);
+    } catch (error) {
+      console.error(error);
+      return;
+    }
+    mediaRecorder.onresume = () => {
+      recordButton.classList.remove("pause");
+      recordButton.classList.toggle("play");
+      recordButton.dataset.status = "pause";
+    };
+    mediaRecorder.onpause = () => {
+      recordButton.classList.remove("play");
+      recordButton.classList.toggle("pause");
+      recordButton.dataset.status = "resume";
+    };
+    mediaRecorder.onstart = () => {
+      recordButton.classList.toggle("play");
+      recordButton.dataset.status = "pause";
+    };
+    mediaRecorder.onstop = () => {
+      if (confirm("Download record ?")) {
+        downloadRecord();
+      } else {
+        recordButton.classList.remove("play");
+        return;
       }
-      mediaRecorder.onresume = () => {
-          recordButton.classList.remove("pause");
-          recordButton.classList.toggle("play");
-          recordButton.dataset.status = "pause";
-      };
-      mediaRecorder.onpause = () => {
-          recordButton.classList.remove("play");
-          recordButton.classList.toggle("pause");
-          recordButton.dataset.status = "resume";
-      };
-      mediaRecorder.onstart = () => {
-          recordButton.classList.toggle("play");
-          recordButton.dataset.status = "pause";
-      };
-      mediaRecorder.onstop = () => {
-          if (confirm("Download record ?")) {
-              downloadRecord();
-          } else {
-              recordButton.classList.remove("play");
-              return;
-          }
-          recordButton.dataset.status = "play";
-      };
+      recordButton.dataset.status = "play";
+    };
 
-      mediaRecorder.ondataavailable = handleDataAvailable;
-      mediaRecorder.start();
+    mediaRecorder.ondataavailable = handleDataAvailable;
+    mediaRecorder.start();
   }
 }
 
 const pauseRecord = () => {
   if (confirm("Pause record ?")) {
-      mediaRecorder.pause();
-  }else{
-      mediaRecorder.stop();
+    mediaRecorder.pause();
+  } else {
+    mediaRecorder.stop();
   }
 }
 
@@ -219,12 +204,12 @@ const resumeRecord = () => {
 
 function handleDataAvailable(event) {
   if (event.data && event.data.size > 0) {
-      recordedBlobs.push(event.data);
+    recordedBlobs.push(event.data);
   }
 }
 
 const downloadRecord = () => {
-  const blob = new Blob(recordedBlobs, {type: 'video/webm'});
+  const blob = new Blob(recordedBlobs, { type: 'video/webm' });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.style.display = 'none';
@@ -233,23 +218,23 @@ const downloadRecord = () => {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   }, 100);
 }
 
 const shareScreem = () => {
-  navigator.mediaDevices.getDisplayMedia({video: true})
-  .then(handleSuccess,handleError);
+  navigator.mediaDevices.getDisplayMedia({ video: true })
+    .then(handleSuccess, handleError);
 }
 
 const handleSuccess = (stream) => {
   shareScreemButton.classList.toggle("play");
-  addVideoStream(shareVideo,stream);
+  addVideoStream(shareVideo, stream);
   stream.getVideoTracks()[0].addEventListener('ended', () => {
-      shareScreemButton.classList.remove("play");
-      videoGrid.removeChild(shareVideo);
-      retoreVideoGrid
+    shareScreemButton.classList.remove("play");
+    videoGrid.removeChild(shareVideo);
+    retoreVideoGrid
   });
 }
 
@@ -268,11 +253,11 @@ const showChatPopup = () => {
 }
 
 function windowOnClick(event) {
-  if (event.target=== invitePopup) {
-      showInvitePopup();
+  if (event.target === invitePopup) {
+    showInvitePopup();
   }
-  if (event.target === chatPopup){
-      showChatPopup();
+  if (event.target === chatPopup) {
+    showChatPopup();
   }
 }
 
@@ -283,11 +268,11 @@ const copyToClipboard = () => {
   navigator.clipboard.writeText(copyText.value);
 }
 
-inviteButton.addEventListener("click",showInvitePopup);
-chatButton.addEventListener("click",showChatPopup);
-copyButton.addEventListener("click",copyToClipboard);
+inviteButton.addEventListener("click", showInvitePopup);
+chatButton.addEventListener("click", showChatPopup);
+copyButton.addEventListener("click", copyToClipboard);
 window.addEventListener("click", windowOnClick);
-playStopButton.addEventListener("click",playStop);
-muteButton.addEventListener("click",muteUnmute);
-shareScreemButton.addEventListener("click",shareScreem);
-recordButton.addEventListener("click",record);
+playStopButton.addEventListener("click", playStop);
+muteButton.addEventListener("click", muteUnmute);
+shareScreemButton.addEventListener("click", shareScreem);
+recordButton.addEventListener("click", record);
