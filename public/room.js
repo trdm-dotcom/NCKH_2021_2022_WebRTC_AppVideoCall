@@ -16,17 +16,16 @@ const shareVideo = document.createElement("video");
 const msgerChat = document.getElementById("msger_chat");
 const listUserOnl = document.getElementById("listUserOnl");
 myVideo.muted = true;
-var joined = [];
 var peers = {};
 var userId = null;
 var localStream;
+var shareStream;
 var mediaRecorder;
 var recordedBlobs;
 var peer = new Peer();
 
 peer.on('open', function (id) {
   userId = id;
-  joined.push(userId);
   let name = prompt("Nhập tên của bạn",'');
   name = name.trim() == '' ? id : name.trim()
   socket.emit("joinRoom", ROOM_ID, {id:id,name:name});
@@ -53,9 +52,12 @@ const playVideoFromCamera = async () => {
 }
 playVideoFromCamera().then((stream) => {
   localStream = stream;
-  addVideoStream(myVideo, stream, userId);
+  addVideoStream(myVideo, localStream, userId);
   socket.on("userConnected", (peerID) => {
-    connectToNewUser(peerID, stream);
+    connectToNewUser(peerID, localStream);
+  });
+  socket.on("disconnect",() => {
+    socket.emit("leaveRoom",ROOM_ID,userId);
   });
   socket.on("userDisconnected",(peerID) => {
     if(peers[peerID]) peers[peerID].close();
@@ -87,6 +89,28 @@ playVideoFromCamera().then((stream) => {
     }
     msgerChat.innerHTML += html
   });
+  socket.on("callShare",(user) => {
+    if (user != userId){
+      var conn = peer.connect(user);
+      conn.on('open', function(){
+        conn.send({type:false});
+        var call = peer.call(user, localStream);
+        var video = document.createElement("video");
+        call.on("stream", (userVideoStream) => {
+          addVideoStream(video, userVideoStream, `share_${user}`);
+        });
+        call.on("close",() => {
+          video.remove();
+        });
+        peers[user] = call;
+      });
+    }
+  });
+  socket.on("stopCallShare",(user)=>{
+    if (user != userId){
+      console.log(user);
+    }
+  })
   document.addEventListener("keydown", (e) => {
     if (e.key === 'Enter' && chatMessage.value.trim() != "") {
       let current = new Date();
@@ -110,7 +134,9 @@ playVideoFromCamera().then((stream) => {
         time:current.toLocaleTimeString()
       });
     }
-  })
+  });
+  shareScreemButton.addEventListener("click", shareScreem);
+  recordButton.addEventListener("click", record);
 }).catch(error => {
   console.error(error)
 });
@@ -127,38 +153,35 @@ socket.on("refeshListUser",(listUserInfo) => {
   listUserOnl.innerHTML = html;
 });
 
-peer.on("call", (call) =>{
-  joined.push(call.peer);
-  getUserMedia(
-    { video: true, audio: true },
-    function (stream) {
-      call.answer(stream); // Answer the call with an A/V stream.
-      const video = document.createElement("video");
-      call.on("stream", function (remoteStream) {
-        addVideoStream(video, remoteStream,call.peer);
-      });
-    },
-    function (err) {
-      console.log("Failed to get local stream", err);
-    }
-  );
+peer.on('connection', function(conn) {
+  conn.on('data', function(data){
+    stream = data.type ? localStream : shareStream;
+    peer.on("call", (call) =>{
+      call.answer(stream);
+      if (data.type){
+        var video = document.createElement("video");
+        call.on("stream", function (remoteStream) {
+          addVideoStream(video, remoteStream,call.peer);
+        });
+      }      
+    });
+  });
 });
 
-socket.on("disconnect",() => {
-  socket.emit("leaveRoom",ROOM_ID,userId);
-})
-
 const connectToNewUser = (peerId, streams) => {
-  joined.push(peerId);
-  var call = peer.call(peerId, streams);
-  var video = document.createElement("video");
-  call.on("stream", (userVideoStream) => {
-    addVideoStream(video, userVideoStream, peerId);
+  var conn = peer.connect(peerId);
+  conn.on('open', function(){
+    conn.send({type:true});
+    var call = peer.call(peerId, streams);
+    var video = document.createElement("video");
+    call.on("stream", (userVideoStream) => {
+      addVideoStream(video, userVideoStream, peerId);
+    });
+    call.on("close",() => {
+      video.remove();
+    });
+    peers[peerId] = call;
   });
-  call.on("close",() => {
-    video.remove();
-  });
-  peers[peerId] = call;
 };
 
 const addVideoStream = (videoEl, stream, id) => {
@@ -277,9 +300,12 @@ const shareScreem = () => {
 }
 
 const handleSuccess = (stream) => {
+  shareStream = stream;
   shareScreemButton.classList.toggle("play");
-  addVideoStream(shareVideo, stream);
-  stream.getVideoTracks()[0].addEventListener('ended', () => {
+  addVideoStream(shareVideo, shareStream,`share_${userId}`);
+  socket.emit("startShare",userId);
+  shareStream.getVideoTracks()[0].addEventListener('ended', () => {
+    socket.emit("stopShare",userId);
     shareScreemButton.classList.remove("play");
     videoGrid.removeChild(shareVideo);
     retoreVideoGrid
@@ -327,6 +353,4 @@ inviteButton.addEventListener("click", showInvitePopup);
 chatButton.addEventListener("click", showChatPopup);
 copyButton.addEventListener("click", copyToClipboard);
 window.addEventListener("click", windowOnClick);
-shareScreemButton.addEventListener("click", shareScreem);
-recordButton.addEventListener("click", record);
 listButton.addEventListener("click",showListUserPopUp);

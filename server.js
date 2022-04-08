@@ -30,11 +30,16 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", (roomId, user) => {
     socket.join(roomId);
     listUserInfo.push(user);
-    console.log(listUserInfo);
     socket.to(roomId).broadcast.emit("userConnected", user.id);
     io.to(roomId).emit("refeshListUser",listUserInfo);
     socket.on("message", (message) => {
       io.to(roomId).emit("createMessage", message);
+    });
+    socket.on("startShare",(user) => {
+      io.to(roomId).emit("callShare",user);
+    });
+    socket.on("stopShare",(user)=>{
+      io.to(roomId).emit("stopCallShare",user);
     });
   });
   socket.on("leaveRoom",(roomId,userId) => {
