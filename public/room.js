@@ -1,4 +1,4 @@
-const socket = io("/");
+const socket = io();
 const chatButton = document.getElementById("chatButton");
 const inviteButton = document.getElementById("inviteButton");
 const copyButton = document.getElementById("copyButton");
@@ -25,7 +25,7 @@ var recordedBlobs;
 var peer = new Peer(undefined, {
   path: "/peerjs",
   host: "/",
-  port: "3030",
+  port: "3000",
 });
 
 peer.on('open', function (id) {

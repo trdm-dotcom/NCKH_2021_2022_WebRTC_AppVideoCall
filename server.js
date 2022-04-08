@@ -1,8 +1,8 @@
 const express = require("express");
 const app = express();
 const server = require("http").Server(app);
-const { v4: uuidv4 } = require("uuid");
 const io = require("socket.io")(server);
+const { v4: uuidv4 } = require("uuid");
 const router = express.Router();
 const redis = require("redis");
 // Peer
@@ -42,4 +42,4 @@ io.on("connection", (socket) => {
   })
 });
 
-server.listen(process.env.PORT || 3030);
+server.listen(3000);
