@@ -1,100 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HOME</title>
-    <link
-      rel="stylesheet"
-      href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
-    />
-    <link rel="stylesheet" href="all.min.css">
-    <link rel="stylesheet" href="style.css" />
-    <script src="peerjs.min.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-      const ROOM_ID = "<%= roomId %>";
-    </script>
-  </head>
-  <body>
-    <div class="main">
-      <div class="main_videos">
-        <div id="video-grid"></div>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NCKH 2021-2022</title>
+  <link rel="stylesheet" href="all.min.css">
+  <link rel="stylesheet" href="style.css" />
+  <script src="peerjs.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const ROOM_ID = "<%= roomId %>";
+  </script>
+</head>
+
+<body>
+  <div class="main flex_column">
+    <div class="main_videos">
+      <div id="video-grid"></div>
+    </div>
+    <div class="main_controls">
+      <div class="main_controls_block">
+        <div class="main_controls_button" id="shareScreemButton">
+          <i class="fa-solid fa-display"></i>
+        </div>
+        <div class="main_controls_button" id="recordButton" data-status="start">
+          <i class="fa-solid fa-video"></i>
+        </div>
       </div>
-      <div class="main_controls">
-        <div class="main_controls_block">
-          <div class="main_controls_button" id="muteButton">
-            <i class="fa-solid fa-microphone-slash"></i>
-          </div>
-          <div class="main_controls_button" id="playStopButton">
-            <i class="fa-solid fa-video-slash"></i>
-          </div>
+      <div class="main_controls_block">
+        <div class="main_controls_button" id="inviteButton">
+          <i class="fa-solid fa-user-plus"></i>
         </div>
-        <div class="main_controls_block">
-          <div class="main_controls_button" id="shareScreemButton">
-            <i class="fa-solid fa-display"></i>
-          </div>
-          <div class="main_controls_button" id="recordButton" data-status="start">
-            <i class="fa-solid fa-video"></i>
-          </div>
-    
+        <div class="main_controls_button" id="listButton">
+          <i class="fa-solid fa-users"></i>
         </div>
-        <div class="main_controls_block">
-          <div class="main_controls_button" id="usersButton">
-            <i class="fa-solid fa-users"></i>
-          </div>
-          <div class="main_controls_button" id="inviteButton">
-            <i class="fa-solid fa-user-plus"></i>
-          </div>
-    
-          <div class="main_controls_button" id="chatButton">
-            <i class="fa-solid fa-comment"></i>
-          </div>
+        <div class="main_controls_button" id="chatButton">
+          <i class="fa-solid fa-comment"></i>
         </div>
       </div>
     </div>
-    <div class="modal" id="invite_popup">
-      <div class="modal-content">
-        <input type="text" value="..." id="roomLink" readonly>
-        <button id="copyButton">Copy</button>
-      </div>
+  </div>
+  <div class="modal" id="invite_popup">
+    <div class="modal-content">
+      <input type="text" value="..." id="roomLink" readonly>
+      <button id="copyButton">Copy</button>
     </div>
-    <div class="modal" id="chat_popup">
-      <div class="modal-content">
-        <div class="msger">
-          <div class="msger-chat">
-            <!-- <div class="msg left-msg">
-                          <div class="msg-bubble">
-                              <div class="msg-info">
-                                  <div class="msg-info-name">BOT</div>
-                              </div>
-              
-                              <div class="msg-text">
-                                  Hi, welcome to SimpleChat! Go ahead and send me a message. 😄
-                              </div>
-                          </div>
-                      </div> -->
-    
-            <!-- <div class="msg right-msg">
-                          <div class="msg-bubble">
-                              <div class="msg-info">
-                                  <div class="msg-info-name">Sajad</div>
-                              </div>
-              
-                              <div class="msg-text">
-                                  You can change your name in JS section!
-                              </div>
-                          </div>
-                      </div> -->
-          </div>
-    
-          <div class="msger-inputarea">
-            <input type="text" class="msger-input" placeholder="Enter your message...">
-            <button type="submit" class="msger-send-btn">Send</button>
-          </div>
+  </div>
+  <div class="modal" id="chat_popup">
+    <div class="modal-content">
+      <div class="msger">
+        <div class="msger-chat" id="msger_chat">
+        </div>
+        <div class="msger-inputarea">
+          <input type="text" class="msger-input" id="chat_message">
+          <button type="button" class="msger-send-btn" id="button_send">Send</button>
         </div>
       </div>
     </div>
-    <script src="script.js"></script>
-  </body>
+  </div>
+  <div class="modal" id="list_user_popup">
+    <div class="modal-content">
+      <div class="list-wrapper">
+        <ul class="list" id="listUserOnl">
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+<script src="room.js"></script>
+
 </html>

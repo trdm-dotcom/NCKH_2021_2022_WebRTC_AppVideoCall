@@ -15,24 +15,39 @@ html,body{
     font-family: 'Lato', sans-serif;
 }
 #video-grid {
+    display: -webkit-box;
+    display: -moz-box;
+    display: -ms-flexbox;
+    display: -moz-flex;
+    display: -webkit-flex;
     display: flex;
+    flex-direction: row;
     justify-content: center;
     height: 100%;
     width: 100%;
     align-items: center;
+    -webkit-flex-wrap: wrap;
     flex-wrap: wrap;
     overflow-y: auto;
 }
 video {
     display: block;
-    flex: 1;
+    flex: 1 1 160px;
     object-fit: cover;
-    border: 5px solid #000;
     max-width: 600px;
 }
 .main {
     height: 100%;
     display: flex;
+}
+.connect{
+    justify-content: center;
+    align-items: center;
+}
+.flex_row{
+    flex-direction: row;
+}
+.flex_column{
     flex-direction: column;
 }
 .main_videos {
@@ -47,7 +62,7 @@ video {
     background-color: #1c1e20;
     color: #d2d2d2;
     padding: 5px;
-    justify-content: space-between;
+    justify-content: center;
 }
 .main_controls_block {
     display: flex;
@@ -97,6 +112,7 @@ video {
     transform: translate(-50%, -50%);
     background-color: white;
     border-radius: 5px;
+    width: 400px;
 }
 #invite_popup .modal-content {
     display: flex;
@@ -132,7 +148,6 @@ video {
     flex-flow: column wrap;
     justify-content: space-between;
     width: 100%;
-
 }
 
 .msger-chat {
@@ -140,6 +155,7 @@ video {
     overflow-y: auto;
     padding: 10px;
     height: 200px;
+    border-radius: 3px;
 }
 
 .msger-chat::-webkit-scrollbar {
@@ -202,6 +218,7 @@ video {
     padding: 10px;
     border-top: var(--border);
     background: #eee;
+    border-radius: 3px;
 }
 
 .msger-inputarea * {
@@ -229,4 +246,44 @@ video {
 
 .msger-chat {
     background-color: #fcfcfe;
+}
+.main_left{
+    flex: 0.6;
+}
+.main_right {
+    flex: 0.4;
+}
+.list-wrapper {
+    margin: 10px auto;
+}
+
+.list {
+    background: #fff;
+    border-radius: 3px;
+    list-style: none;
+}
+
+.list-item {
+    display: flex;
+    margin: 10px;
+    padding-bottom: 5px;
+    padding-top: 5px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+.list-item:last-child {
+    border-bottom: none;
+}
+.list-item-content {
+    margin-left: 20px;
+}
+.list-item-content h4, .list-item-content p {
+    margin: 0;
+}
+.list-item-content h4 {
+    margin-top: 10px;
+    font-size: 18px;
+}
+.list-item-content p {
+    margin-top: 5px;
+    color: #aaa;
 }
