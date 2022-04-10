@@ -88,6 +88,20 @@ socket.on('connect', () => {
       await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
     }
   });
+
+  socket.on('showChat',(data) => showMsg(data));
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === 'Enter' && chatMessage.value.trim() != "") {
+      chat();
+    }
+  });
+  
+  buttonSend.addEventListener("click",() => {
+    if (chatMessage.value.trim() != "") {
+      chat();
+    }
+  });
 });
 
 function init(createOffer, partnerName) {
@@ -213,46 +227,73 @@ function closeVideo(elemId) {
   }
 }
 
-function shareScreen() {
-  if (hasUserMedia()) {
-    return navigator.mediaDevices.getDisplayMedia({
-      video: {
-        cursor: "always"
-      },
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        sampleRate: 44100
-      }
-    });
+function showMsg(data, type){
+  let html = '';
+  if (type) {
+    html = `<div class="msg right-msg">
+                  <div class="msg-bubble">
+                    <div class="msg-info">
+                      <div class="msg-info-name">${data.sender}</div>
+                      <div class="msg-info-time">${data.time}</div>
+                    </div>
+                    <div class="msg-text">${data.msg}</div>
+                  </div>
+                </div>`
   }
-
   else {
-    throw new Error('User media not available');
+    html = `<div class="msg left-msg">
+                  <div class="msg-bubble">
+                    <div class="msg-info">
+                      <div class="msg-info-name">${data.sender}</div>
+                      <div class="msg-info-time">${data.time}</div>
+                    </div>
+                    <div class="msg-text">${data.msg}</div>
+                  </div>
+                </div>`
+  }
+  msgerChat.innerHTML += html
+}
+
+function chat(){
+  let current = new Date();
+  let msg = chatMessage.value.trim();
+  chatMessage.value = "";
+  data = {
+    room: ROOM_ID,
+    msg: msg,
+    sender: userName,
+    time: current.toLocaleTimeString()
+  }
+  socket.emit("chat", data);
+  showMsg(data, true);
+}
+
+function showInvitePopup() {
+  invitePopup.classList.toggle("show-modal");
+  document.getElementById("roomLink").value = window.location.href;
+}
+
+function showChatPopup() {
+  chatPopup.classList.toggle("show-modal");
+}
+
+function windowOnClick(event) {
+  if (event.target === invitePopup) {
+    showInvitePopup();
+  }
+  if (event.target === chatPopup) {
+    showChatPopup();
   }
 }
 
-function shareScreen() {
-  shareScreen().then((stream) => {
-    //save my screen stream
-    myScreen = stream;
-
-    //When the stop sharing button shown by the browser is clicked
-    myScreen.getVideoTracks()[0].addEventListener('ended', () => {
-      stopSharingScreen();
-    });
-  }).catch((e) => {
-    throw e;
-  });
+function copyToClipboard() {
+  let copyText = document.getElementById("roomLink");
+  copyText.select();
+  copyText.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(copyText.value);
 }
 
-function stopSharingScreen() {
-  return new Promise((res, rej) => {
-    myScreen.getTracks().length ? screen.getTracks().forEach(track => track.stop()) : '';
-    res();
-  }).then(() => {
-
-  }).catch((e) => {
-    throw e;
-  });
-}
+inviteButton.addEventListener("click", showInvitePopup);
+chatButton.addEventListener("click", showChatPopup);
+window.addEventListener("click", windowOnClick);
+copyButton.addEventListener("click", copyToClipboard);

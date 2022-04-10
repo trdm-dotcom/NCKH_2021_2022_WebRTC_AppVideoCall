@@ -31,8 +31,8 @@ io.on("connection", (socket) => {
     socket.to(data.to).emit("newUserStart", {sender:data.sender});
   });
   
-  socket.on("sendMessage",(data) => {
-    socket.to(data.room).emit("showMessage",{ sender: data.sender, msg: data.msg });
+  socket.on("chat",(data) => {
+    socket.to(data.room).emit("showChat",{ sender: data.sender, msg: data.msg, time: data.time });
   });
 
   socket.on("record",(data) => {
@@ -44,7 +44,6 @@ io.on("connection", (socket) => {
   });
 
   socket.on( 'ice candidates', ( data ) => {
-    console.log(data);
     socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
   });
 });
