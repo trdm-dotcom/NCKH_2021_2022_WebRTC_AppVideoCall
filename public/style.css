@@ -287,3 +287,10 @@ video {
     margin-top: 5px;
     color: #aaa;
 }
+#localVideo { 
+    width: 150px; 
+    height: 150px; 
+    position: absolute; 
+    top: 15px; 
+    right: 15px; 
+}

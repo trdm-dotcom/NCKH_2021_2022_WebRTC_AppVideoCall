@@ -4,7 +4,6 @@ const server = require("http").Server(app);
 const { v4: uuidv4 } = require("uuid");
 const io = require("socket.io")(server);
 const router = express.Router();
-const redis = require("redis");
 
 app.set("view engine", "ejs");
 app.use(express.static("public"));
@@ -48,4 +47,4 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(process.env.PORT || 3030);
+server.listen(3030);

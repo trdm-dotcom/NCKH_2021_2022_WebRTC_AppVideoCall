@@ -9,10 +9,11 @@ const chatMessage = document.getElementById("chat_message");
 const buttonSend = document.getElementById("button_send");
 const recordButton = document.getElementById("recordButton");
 const shareScreemButton = document.getElementById("shareScreemButton");
-const listButton = document.getElementById("listButton");
 const listUserPopup = document.getElementById("list_user_popup");
 const msgerChat = document.getElementById("msger_chat");
 const listUserOnl = document.getElementById("listUserOnl");
+const localVideo = document.getElementById("localVideo");
+const shareVideo = document.createElement("video");
 const configuration = {
   "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
 };
@@ -32,9 +33,11 @@ socket.on('connect', () => {
   userName = userName ? userName.trim() : socketId;
   getUserFullMedia().then((stream) => {
     myStream = stream;
-    let video = document.createElement("video");
-    video.mute = true
-    addVideoStream(video, myStream, `${socketId}-video`);
+    localVideo.mute = true;
+    localVideo.srcObject = stream;
+    localVideo.addEventListener("loadedmetadata", () => {
+      localVideo.play();
+    });
   }).catch((error) => {
     throw error;
   });
@@ -66,9 +69,9 @@ socket.on('connect', () => {
         await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description))
       }
       getUserFullMedia().then(async (stream) => {
-        if (!document.getElementById(`${socketId}-video`).srcObject) {
-          document.getElementById(`${socketId}-video`).srcObject = stream;
-        }
+        // if (!document.getElementById(`${socketId}-video`).srcObject) {
+        //   document.getElementById(`${socketId}-video`).srcObject = stream;
+        // }
         myStream = stream;
 
         stream.getTracks().forEach((track) => {
@@ -153,7 +156,7 @@ function init(createOffer, partnerName) {
 
     else {
       let video = document.createElement('video');
-      addVideoStream(video, stream, `${partnerName}-video`)
+      addVideoStream(video, stream, `${partnerName}-video`);
     }
   };
 
@@ -227,7 +230,7 @@ function addVideoStream(videoEl, stream, id) {
 };
 
 function retoreVideoGrid() {
-  let totalVideos = document.getElementsByTagName("video").length;
+  let totalVideos = videoGrid.getElementsByTagName("video").length;
   let newWidth = totalVideos <= 2 ? '50%' : (
     totalVideos == 3 ? '33.33%' : (
       totalVideos <= 8 ? '25%' : (
@@ -258,6 +261,7 @@ function shareScreem() {
     myScreen=stream;
     broadcastNewTracks(stream,'video');
     shareScreemButton.classList.toggle("play");
+    addVideoStream(shareVideo, stream, `${socketId}-sharea`);
     myScreen.getVideoTracks()[0].addEventListener( 'ended', () => {
       stopSharingScreen();
     });
@@ -273,8 +277,9 @@ function stopSharingScreen(){
     }
     res();
   }).then(()=>{
-    shareScreemButton.classList.remove("play");
     broadcastNewTracks(myStream,'video');
+    videoGrid.removeChild(shareVideo);
+    shareScreemButton.classList.remove("play");
   }).catch((e) => {
     throw e;
   })
