@@ -1,4 +1,4 @@
-let socket = io('');
+let socket = io('/');
 const chatButton = document.getElementById("chatButton");
 const inviteButton = document.getElementById("inviteButton");
 const copyButton = document.getElementById("copyButton");
