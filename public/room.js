@@ -89,19 +89,26 @@ socket.on('connect', () => {
     }
   });
 
-  socket.on('showChat',(data) => showMsg(data));
+  socket.on('showChat', (data) => showMsg(data));
+
+  socket.on('startRecord', (data) => {
+    if (!confirm(`${data.sender} bắt đầu ghi hình!\n bắt đầu ghi hình`)){
+      
+    }
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === 'Enter' && chatMessage.value.trim() != "") {
       chat();
     }
   });
-  
-  buttonSend.addEventListener("click",() => {
+
+  buttonSend.addEventListener("click", () => {
     if (chatMessage.value.trim() != "") {
       chat();
     }
   });
+  recordButton.addEventListener("click", record);
 });
 
 function init(createOffer, partnerName) {
@@ -190,6 +197,24 @@ function getUserFullMedia() {
   }
 }
 
+function getUserDisplayMedia() {
+  if (hasUserMedia()) {
+    return navigator.mediaDevices.getDisplayMedia({
+      video: {
+        cursor: "always"
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100
+      }
+    });
+  }
+  else {
+    throw new Error("WebRTC is not supported");
+  }
+}
+
 function addVideoStream(videoEl, stream, id) {
   videoEl.srcObject = stream;
   videoEl.id = id;
@@ -227,7 +252,102 @@ function closeVideo(elemId) {
   }
 }
 
-function showMsg(data, type){
+function record() {
+  if (recordButton.dataset.status === "start") {
+    if (myScreen && myScreen.getVideoTracks().length) {
+      startRecord(myScreen);
+    }
+    else {
+      getUserDisplayMedia().then((screenStream) => {
+        startRecord(screenStream);
+      }).catch((e) => {
+        throw e;
+      });
+    }
+  }
+  else if (recordButton.dataset.status === "pause") {
+    pauseRecord();
+  }
+  else if (recordButton.dataset.status === "resume") {
+    resumeRecord();
+  }
+}
+
+function startRecord(stream) {
+  if (confirm("Start record ?")) {
+    recordedBlobs = [];
+    var options = { mimeType: "video/webm; codecs=vp9" };
+    try {
+      mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorder.ondataavailable = handleDataAvailable;
+      mediaRecorder.start();
+    } catch (error) {
+      console.error(error);
+      return;
+    }
+    mediaRecorder.onresume = () => {
+      socket.emit("record", { room: ROOM_ID, sender: userName });
+      recordButton.classList.remove("pause");
+      recordButton.classList.toggle("play");
+      recordButton.dataset.status = "pause";
+    };
+    mediaRecorder.onpause = () => {
+      recordButton.classList.remove("play");
+      recordButton.classList.toggle("pause");
+      recordButton.dataset.status = "resume";
+    };
+    mediaRecorder.onstart = () => {
+      socket.emit("record", { room: ROOM_ID, sender: userName });
+      recordButton.classList.toggle("play");
+      recordButton.dataset.status = "pause";
+    };
+    mediaRecorder.onstop = () => {
+      if (confirm("Download record ?")) {
+        downloadRecord();
+      } else {
+        recordButton.classList.remove("play");
+        return;
+      }
+      recordButton.dataset.status = "play";
+    };
+  }
+}
+
+function pauseRecord() {
+  if (confirm("Pause record ?")) {
+    mediaRecorder.pause();
+  } else {
+    mediaRecorder.stop();
+  }
+}
+
+function resumeRecord() {
+  mediaRecorder.resume();
+}
+
+function handleDataAvailable(event) {
+  if (event.data && event.data.size > 0) {
+    recordedStream.push(event.data);
+  }
+}
+
+function downloadRecord() {
+  let blob = new Blob(recordedBlobs, { type: 'video/webm' });
+  let url = window.URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = 'test.webm';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 100);
+}
+
+
+function showMsg(data, type) {
   let html = '';
   if (type) {
     html = `<div class="msg right-msg">
@@ -254,7 +374,7 @@ function showMsg(data, type){
   msgerChat.innerHTML += html
 }
 
-function chat(){
+function chat() {
   let current = new Date();
   let msg = chatMessage.value.trim();
   chatMessage.value = "";
