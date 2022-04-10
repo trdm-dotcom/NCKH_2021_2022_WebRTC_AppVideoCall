@@ -1,4 +1,4 @@
-const socket = io("");
+let socket = io('');
 const chatButton = document.getElementById("chatButton");
 const inviteButton = document.getElementById("inviteButton");
 const copyButton = document.getElementById("copyButton");
@@ -11,346 +11,248 @@ const recordButton = document.getElementById("recordButton");
 const shareScreemButton = document.getElementById("shareScreemButton");
 const listButton = document.getElementById("listButton");
 const listUserPopup = document.getElementById("list_user_popup");
-const myVideo = document.createElement("video");
-const shareVideo = document.createElement("video");
 const msgerChat = document.getElementById("msger_chat");
 const listUserOnl = document.getElementById("listUserOnl");
-myVideo.muted = true;
-var peers = {};
-var userId = null;
-var localStream;
-var shareStream;
-var mediaRecorder;
-var recordedBlobs;
-var peer = new Peer();
+const configuration = {
+  "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
+};
+var socketId = null;
+var userName = null;
+var pc = [];
+var myStream = null;
+var myScreen = null;
+var recordedStream = [];
+var mediaRecorder = null;
+var getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 
-peer.on('open', function (id) {
-  userId = id;
-  let name = prompt("Nhập tên của bạn",'');
-  name = name.trim() == '' ? id : name.trim()
-  socket.emit("joinRoom", ROOM_ID, {id:id,name:name});
+
+socket.on('connect', () => {
+  socketId = socket.io.engine.id;
+  userName = prompt("Nhập tên của bạn", '');
+  userName = userName ? userName.trim() : socketId;
+  getUserFullMedia().then((stream) => {
+    myStream = stream;
+    let video = document.createElement("video");
+    video.mute = true
+    addVideoStream(video, myStream, `${socketId}-video`);
+  }).catch((error) => {
+    throw error;
+  });
+
+  socket.emit("joinRoom", { room: ROOM_ID, socketId: socketId, name: userName });
+
+  socket.on('newUser', (data) => {
+    console.log('newUser', data.socketId);
+    socket.emit("connectNewUser", { to: data.socketId, sender: socketId });
+    pc.push(data.socketId);
+    init(true, data.socketId);
+  });
+
+  socket.on('newUserStart', (data) => {
+    console.log('oldUser', data.sender);
+    pc.push(data.sender);
+    init(false, data.sender);
+  });
+
+  socket.on('ice candidates', async (data) => {
+    if (data.candidate) {
+      await pc[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate))
+    }
+  });
+
+  socket.on('sdp', async (data) => {
+    if (data.description.type === 'offer') {
+      if (data.description) {
+        await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description))
+      }
+      getUserFullMedia().then(async (stream) => {
+        if (!document.getElementById(`${socketId}-video`).srcObject) {
+          document.getElementById(`${socketId}-video`).srcObject = stream;
+        }
+        myStream = stream;
+
+        stream.getTracks().forEach((track) => {
+          pc[data.sender].addTrack(track, stream);
+        });
+
+        let answer = await pc[data.sender].createAnswer();
+
+        await pc[data.sender].setLocalDescription(answer);
+
+        socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socketId });
+      }).catch((e) => {
+        throw e;
+      });
+    }
+    else if (data.description.type === 'answer') {
+      await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+    }
+  });
 });
 
-var getUserMedia =
-  navigator.getUserMedia ||
-  navigator.webkitGetUserMedia ||
-  navigator.mozGetUserMedia;
-const hasUserMedia = () => {
+function init(createOffer, partnerName) {
+  pc[partnerName] = new RTCPeerConnection(configuration);
+  if (myScreen && myScreen.getTracks().length) {
+    myScreen.getTracks().forEach((track) => {
+      pc[partnerName].addTrack(track, myScreen);
+    });
+  } else if (myStream) {
+    myStream.getTracks().forEach((track) => {
+      pc[partnerName].addTrack(track, myStream);
+    });
+  } else {
+    getUserFullMedia().then((stream) => {
+      myStream = stream;
+      stream.getTracks().forEach((track) => {
+        pc[partnerName].addTrack(track, stream);
+      });
+    }).catch((error) => {
+      throw error;
+    });
+  }
+
+  if (createOffer) {
+    pc[partnerName].onnegotiationneeded = async () => {
+      let offer = await pc[partnerName].createOffer();
+      await pc[partnerName].setLocalDescription(offer);
+      socket.emit('sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socketId });
+    };
+  }
+
+  pc[partnerName].onicecandidate = ({ candidate }) => {
+    socket.emit('ice candidates', { candidate: candidate, to: partnerName, sender: socketId });
+  };
+
+  pc[partnerName].ontrack = (e) => {
+    let stream = e.streams[0];
+    if (document.getElementById(`${partnerName}-video`)) {
+      document.getElementById(`${partnerName}-video`).srcObject = stream;
+    }
+
+    else {
+      let video = document.createElement('video');
+      addVideoStream(video, stream, `${partnerName}-video`)
+    }
+  };
+
+  pc[partnerName].onconnectionstatechange = (d) => {
+    switch (pc[partnerName].iceConnectionState) {
+      case 'disconnected':
+      case 'failed':
+        closeVideo(`${partnerName}-video`);
+        break;
+
+      case 'closed':
+        closeVideo(`${partnerName}-video`);
+        break;
+    }
+  };
+
+  pc[partnerName].onsignalingstatechange = (d) => {
+    switch (pc[partnerName].signalingState) {
+      case 'closed':
+        closeVideo(`${partnerName}-video`);
+        break;
+    }
+  };
+}
+
+function hasUserMedia() {
   return !!(navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia);
 }
-const playVideoFromCamera = async () => {
-  let stream = null;
-  if (hasUserMedia) {
-    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-    const config = { video: true, audio: true }
-    stream = await navigator.mediaDevices.getUserMedia(config);
+
+function getUserFullMedia() {
+  if (hasUserMedia()) {
+    return navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true
+      }
+    });
   }
   else {
-    alert("WebRTC is not supported");
+    throw new Error("WebRTC is not supported");
   }
-  return stream;
 }
-playVideoFromCamera().then((stream) => {
-  localStream = stream;
-  addVideoStream(myVideo, localStream, userId);
-  socket.on("userConnected", (peerID) => {
-    connectToNewUser(peerID, localStream);
-  });
-  socket.on("disconnect",() => {
-    socket.emit("leaveRoom",ROOM_ID,userId);
-  });
-  socket.on("userDisconnected",(peerID) => {
-    if(peers[peerID]) peers[peerID].close();
-  });
-  socket.on("createMessage", (msg) => {
-    let html = '';
-    console.log(msg);
-    if (msg.user != userId){
-      html = `<div class="msg left-msg">
-                  <div class="msg-bubble">
-                    <div class="msg-info">
-                      <div class="msg-info-name">${msg.user}</div>
-                      <div class="msg-info-time">${msg.time}</div>
-                    </div>
-                    <div class="msg-text">${msg.msg}</div>
-                  </div>
-                </div>`
-    }
-    else{
-      html = `<div class="msg right-msg">
-                  <div class="msg-bubble">
-                    <div class="msg-info">
-                      <div class="msg-info-name">${msg.user}</div>
-                      <div class="msg-info-time">${msg.time}</div>
-                    </div>
-                    <div class="msg-text">${msg.msg}</div>
-                  </div>
-                </div>`
-    }
-    msgerChat.innerHTML += html
-  });
-  socket.on("callShare",(user) => {
-    if (user != userId){
-      var conn = peer.connect(user);
-      conn.on('open', function(){
-        conn.send({type:false});
-        var call = peer.call(user, localStream);
-        var video = document.createElement("video");
-        call.on("stream", (userVideoStream) => {
-          addVideoStream(video, userVideoStream, `share_${user}`);
-        });
-        call.on("close",() => {
-          video.remove();
-        });
-        peers[user] = call;
-      });
-    }
-  });
-  socket.on("stopCallShare",(user)=>{
-    if (user != userId){
-      console.log(user);
-    }
-  })
-  document.addEventListener("keydown", (e) => {
-    if (e.key === 'Enter' && chatMessage.value.trim() != "") {
-      let current = new Date();
-      let msg = chatMessage.value.trim(); 
-      chatMessage.value = "";
-      socket.emit("message", {
-        msg:msg,
-        user:userId,
-        time:current.toLocaleTimeString()
-      });
-    }
-  });
-  buttonSend.addEventListener("click",() => {
-    if (chatMessage.value.trim() != "") {
-      let current = new Date();
-      let msg = chatMessage.value.trim(); 
-      chatMessage.value = "";
-      socket.emit("message", {
-        msg:msg,
-        user:userId,
-        time:current.toLocaleTimeString()
-      });
-    }
-  });
-  shareScreemButton.addEventListener("click", shareScreem);
-  recordButton.addEventListener("click", record);
-}).catch(error => {
-  console.error(error)
-});
 
-socket.on("refeshListUser",(listUserInfo) => {
-  let html = '';
-  listUserInfo.forEach(element => {
-    html += `<li class="list-item">
-              <div class="list-item-content">
-                <h4>${element.name}</h4>
-              </div>
-            </li>`
-  });
-  listUserOnl.innerHTML = html;
-});
-
-peer.on('connection', function(conn) {
-  conn.on('data', function(data){
-    stream = data.type ? localStream : shareStream;
-    peer.on("call", (call) =>{
-      call.answer(stream);
-      if (data.type){
-        var video = document.createElement("video");
-        call.on("stream", function (remoteStream) {
-          addVideoStream(video, remoteStream,call.peer);
-        });
-      }      
-    });
-  });
-});
-
-const connectToNewUser = (peerId, streams) => {
-  var conn = peer.connect(peerId);
-  conn.on('open', function(){
-    conn.send({type:true});
-    var call = peer.call(peerId, streams);
-    var video = document.createElement("video");
-    call.on("stream", (userVideoStream) => {
-      addVideoStream(video, userVideoStream, peerId);
-    });
-    call.on("close",() => {
-      video.remove();
-    });
-    peers[peerId] = call;
-  });
-};
-
-const addVideoStream = (videoEl, stream, id) => {
+function addVideoStream(videoEl, stream, id) {
   videoEl.srcObject = stream;
   videoEl.id = id;
   videoEl.addEventListener("loadedmetadata", () => {
     videoEl.play();
   });
-
   videoGrid.append(videoEl);
-  let totalUsers = document.getElementsByTagName("video").length;
-  if (totalUsers > 1) {
-    for (let index = 0; index < totalUsers; index++) {
-      document.getElementsByTagName("video")[index].style.width =
-        100 / totalUsers + "%";
-    }
-  }
+  retoreVideoGrid();
 };
 
-const retoreVideoGrid = () => {
+function retoreVideoGrid() {
   let totalVideos = document.getElementsByTagName("video").length;
-  if (totalVideos > 1) {
-    for (let index = 0; index < totalVideos; index++) {
-      document.getElementsByTagName("video")[index].style.width = 100 / totalVideos + "%";
-    }
+  let newWidth = totalVideos <= 2 ? '50%' : (
+    totalVideos == 3 ? '33.33%' : (
+      totalVideos <= 8 ? '25%' : (
+        totalVideos <= 15 ? '20%' : (
+          totalVideos <= 18 ? '16%' : (
+            totalVideos <= 23 ? '15%' : (
+              totalVideos <= 32 ? '12%' : '10%'
+            )
+          )
+        )
+      )
+    )
+  );
+  for (let index = 0; index < totalVideos; index++) {
+    document.getElementsByTagName("video")[index].style.width = newWidth;
   }
 }
 
-const record = () => {
-  if (recordButton.dataset.status === "start") {
-    startRecord();
-  }
-  else if (recordButton.dataset.status === "pause") {
-    pauseRecord();
-  }
-  else if (recordButton.dataset.status === "resume") {
-    resumeRecord();
+function closeVideo(elemId) {
+  if (document.getElementById(elemId)) {
+    document.getElementById(elemId).remove();
+    retoreVideoGrid();
   }
 }
 
-const startRecord = () => {
-  if (confirm("Start record ?")) {
-    recordedBlobs = [];
-    var options = { mimeType: "video/webm; codecs=vp9" };
-    try {
-      mediaRecorder = new MediaRecorder(localStream, options);
-    } catch (error) {
-      console.error(error);
-      return;
-    }
-    mediaRecorder.onresume = () => {
-      recordButton.classList.remove("pause");
-      recordButton.classList.toggle("play");
-      recordButton.dataset.status = "pause";
-    };
-    mediaRecorder.onpause = () => {
-      recordButton.classList.remove("play");
-      recordButton.classList.toggle("pause");
-      recordButton.dataset.status = "resume";
-    };
-    mediaRecorder.onstart = () => {
-      recordButton.classList.toggle("play");
-      recordButton.dataset.status = "pause";
-    };
-    mediaRecorder.onstop = () => {
-      if (confirm("Download record ?")) {
-        downloadRecord();
-      } else {
-        recordButton.classList.remove("play");
-        return;
+function shareScreen() {
+  if (hasUserMedia()) {
+    return navigator.mediaDevices.getDisplayMedia({
+      video: {
+        cursor: "always"
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100
       }
-      recordButton.dataset.status = "play";
-    };
+    });
+  }
 
-    mediaRecorder.ondataavailable = handleDataAvailable;
-    mediaRecorder.start();
+  else {
+    throw new Error('User media not available');
   }
 }
 
-const pauseRecord = () => {
-  if (confirm("Pause record ?")) {
-    mediaRecorder.pause();
-  } else {
-    mediaRecorder.stop();
-  }
-}
+function shareScreen() {
+  shareScreen().then((stream) => {
+    //save my screen stream
+    myScreen = stream;
 
-const resumeRecord = () => {
-  mediaRecorder.resume();
-}
-
-function handleDataAvailable(event) {
-  if (event.data && event.data.size > 0) {
-    recordedBlobs.push(event.data);
-  }
-}
-
-const downloadRecord = () => {
-  const blob = new Blob(recordedBlobs, { type: 'video/webm' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.style.display = 'none';
-  a.href = url;
-  a.download = 'test.webm';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  }, 100);
-}
-
-const shareScreem = () => {
-  navigator.mediaDevices.getDisplayMedia({ video: true })
-    .then(handleSuccess, handleError);
-}
-
-const handleSuccess = (stream) => {
-  shareStream = stream;
-  shareScreemButton.classList.toggle("play");
-  addVideoStream(shareVideo, shareStream,`share_${userId}`);
-  socket.emit("startShare",userId);
-  shareStream.getVideoTracks()[0].addEventListener('ended', () => {
-    socket.emit("stopShare",userId);
-    shareScreemButton.classList.remove("play");
-    videoGrid.removeChild(shareVideo);
-    retoreVideoGrid
+    //When the stop sharing button shown by the browser is clicked
+    myScreen.getVideoTracks()[0].addEventListener('ended', () => {
+      stopSharingScreen();
+    });
+  }).catch((e) => {
+    throw e;
   });
 }
 
-const handleError = (error) => {
-  console.error(error);
-  return;
-}
+function stopSharingScreen() {
+  return new Promise((res, rej) => {
+    myScreen.getTracks().length ? screen.getTracks().forEach(track => track.stop()) : '';
+    res();
+  }).then(() => {
 
-const showInvitePopup = () => {
-  invitePopup.classList.toggle("show-modal");
-  document.getElementById("roomLink").value = window.location.href;
+  }).catch((e) => {
+    throw e;
+  });
 }
-
-const showChatPopup = () => {
-  chatPopup.classList.toggle("show-modal");
-}
-
-const showListUserPopUp = () => {
-  listUserPopup.classList.toggle("show-modal");
-}
-
-function windowOnClick(event) {
-  if (event.target === invitePopup) {
-    showInvitePopup();
-  }
-  if (event.target === chatPopup) {
-    showChatPopup();
-  }
-  if (event.target === listUserPopup){
-    showListUserPopUp();
-  }
-}
-
-const copyToClipboard = () => {
-  let copyText = document.getElementById("roomLink");
-  copyText.select();
-  copyText.setSelectionRange(0, 99999);
-  navigator.clipboard.writeText(copyText.value);
-}
-
-inviteButton.addEventListener("click", showInvitePopup);
-chatButton.addEventListener("click", showChatPopup);
-copyButton.addEventListener("click", copyToClipboard);
-window.addEventListener("click", windowOnClick);
-listButton.addEventListener("click",showListUserPopUp);

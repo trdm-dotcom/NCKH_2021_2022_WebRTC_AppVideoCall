@@ -5,16 +5,9 @@ const { v4: uuidv4 } = require("uuid");
 const io = require("socket.io")(server);
 const router = express.Router();
 const redis = require("redis");
-// Peer
-
-const { ExpressPeerServer } = require("peer");
-const peerServer = ExpressPeerServer(server, {
-  debug: true,
-});
 
 app.set("view engine", "ejs");
 app.use(express.static("public"));
-app.use("/peerjs", peerServer);
 
 router.get("/", (req, rsp) => {
   rsp.redirect(`/${uuidv4()}`);
@@ -25,26 +18,35 @@ router.get("/:room", (req, res) => {
 });
 
 app.use(router);
-let listUserInfo = [];
 io.on("connection", (socket) => {
-  socket.on("joinRoom", (roomId, user) => {
-    socket.join(roomId);
-    listUserInfo.push(user);
-    socket.to(roomId).broadcast.emit("userConnected", user.id);
-    io.to(roomId).emit("refeshListUser",listUserInfo);
-    socket.on("message", (message) => {
-      io.to(roomId).emit("createMessage", message);
-    });
-    socket.on("startShare",(user) => {
-      io.to(roomId).emit("callShare",user);
-    });
-    socket.on("stopShare",(user)=>{
-      io.to(roomId).emit("stopCallShare",user);
-    });
+  socket.on("joinRoom", (data) => {
+    socket.join(data.room);
+    socket.join(data.socketId);
+    if(socket.adapter.rooms[data.room]){
+      socket.to(data.room).emit("newUser",{socketId:data.socketId});
+    }
   });
-  socket.on("leaveRoom",(roomId,userId) => {
-    socket.to(roomId).broadcast.emit("userDisconnected", userId);
-  })
+
+  socket.on("connectNewUser",(data) => {
+    socket.to(data.to).emit("newUserStart", {sender:data.sender});
+  });
+  
+  socket.on("sendMessage",(data) => {
+    socket.to(data.room).emit("showMessage",{ sender: data.sender, msg: data.msg });
+  });
+
+  socket.on("record",(data) => {
+    socket.to(data.room).emit("startRecord",{ sender: data.sender});
+  });
+
+  socket.on("sdp",(data) => {
+    socket.to(data.to).emit("sdp",{ description: data.description, sender: data.sender })
+  });
+
+  socket.on( 'ice candidates', ( data ) => {
+    console.log(data);
+    socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
+  });
 });
 
 server.listen(process.env.PORT || 3030);
