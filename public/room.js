@@ -93,7 +93,7 @@ socket.on('connect', () => {
 
   socket.on('startRecord', (data) => {
     if (!confirm(`${data.sender} bắt đầu ghi hình!\n bắt đầu ghi hình`)){
-      
+
     }
   });
 
@@ -109,6 +109,7 @@ socket.on('connect', () => {
     }
   });
   recordButton.addEventListener("click", record);
+  shareScreemButton.addEventListener("click", shareScreem);
 });
 
 function init(createOffer, partnerName) {
@@ -249,6 +250,50 @@ function closeVideo(elemId) {
   if (document.getElementById(elemId)) {
     document.getElementById(elemId).remove();
     retoreVideoGrid();
+  }
+}
+
+function shareScreem() {
+  getUserDisplayMedia().then((stream) => {
+    myScreen=stream;
+    broadcastNewTracks(stream,'video');
+    shareScreemButton.classList.toggle("play");
+    myScreen.getVideoTracks()[0].addEventListener( 'ended', () => {
+      stopSharingScreen();
+    });
+  }).catch((e) => {
+    throw e;
+  });
+}
+
+function stopSharingScreen(){
+  return new Promise((res,rej) => {
+    if (myScreen.getTracks().length){
+      myScreen.getTracks().forEach(track => track.stop())
+    }
+    res();
+  }).then(()=>{
+    shareScreemButton.classList.remove("play");
+    broadcastNewTracks(myStream,'video');
+  }).catch((e) => {
+    throw e;
+  })
+}
+
+function broadcastNewTracks(stream, type) {
+  let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+  for (let p in pc) {
+    let pName = pc[p];
+    if (typeof pc[pName] == 'object') {
+      replaceTrack(track, pc[pName]);
+    }
+  }
+}
+
+function replaceTrack( stream, recipientPeer ) {
+  let sender = recipientPeer.getSenders ? recipientPeer.getSenders().find(s => s.track && s.track.kind === stream.kind) : false;
+  if (sender) {
+    sender.replaceTrack(stream)
   }
 }
 
